@@ -1,7 +1,7 @@
 # The adopted canary. This repo is a dormant Claudinite member on the
 # staging distro, so nothing moves its pin but this run. A Claudinite engine
-# release dispatches it with the version it just published, and it runs
-# this repo's ordinary engine update (cn update engine, as the engine/update
+# release dispatches it with the version it just published. It brings the
+# packs up to date first, then runs this repo's ordinary engine update (cn update engine, as the engine/update
 # task does) until that version lands. It passes when the update PR opens
 # for the version, its CI goes green and it merges, then cn selftest --repo
 # passes on the new main and cn check world reports no finding, deprecations
@@ -54,6 +54,50 @@ jobs:
           persist-credentials: false
       - name: download the pinned engine
         run: sh .claudinite/launch version
+      # The engine is judged against the packs as they are now: a pack fix
+      # this repo has not taken would fail selftest and stop the engine
+      # update before it starts.
+      - name: update the packs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          deadline=$((SECONDS + 30 * 60))
+          pr=''
+          while :; do
+            git fetch -q origin main
+            git reset -q --hard FETCH_HEAD
+            if [ -n "$pr" ] && [ "$(gh pr view "$pr" --json state --jq .state)" = MERGED ]; then
+              echo "#$pr merged"
+              break
+            fi
+            verdict=$(.claudinite/bin/cn update packs | tail -n 1)
+            echo "cn update packs: $verdict"
+            case $verdict in
+              "up to date" | "landed "*)
+                break ;;
+              "opened #"*)
+                pr=${verdict#opened #}
+                pr=${pr%% *} ;;
+              "skipped: #"*" is open and its CI concluded "*)
+                echo "::error::the pack update PR's CI is red: $verdict"
+                exit 1 ;;
+              "skipped: #"*" is open and "*)
+                pr=${verdict#skipped: #}
+                pr=${pr%% *} ;;
+              "skipped: main has no CI run yet"* | "skipped: main is not green (queued)" | "skipped: main is not green (in_progress)" \
+                | "skipped: main is not green (waiting)" | "skipped: main is not green (pending)" | "skipped: main is not green (requested)")
+                ;;
+              *)
+                echo "::error::the pack update stopped at: $verdict"
+                exit 1 ;;
+            esac
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "::error::the packs had not landed after 30 minutes; the last verdict was: $verdict"
+              exit 1
+            fi
+            sleep 30
+          done
       # The findings, not the exit code, are what the run after the update
       # is compared with, so a failing check world here does not stop it.
       - name: findings before the update
