@@ -1,0 +1,163 @@
+# The adopted canary. This repo is a dormant Claudinite member on the
+# staging distro, so nothing moves its pin but this run. A Claudinite engine
+# release dispatches it with the version it just published, and it runs
+# this repo's ordinary engine update (cn update engine, as the engine/update
+# task does) until that version lands. It passes when the update PR opens
+# for the version, its CI goes green and it merges, then cn selftest --repo
+# passes on the new main and cn check world reports no finding, deprecations
+# aside, that it did not report before the update. When it fails, the report
+# job opens a release-blocker issue naming the version in this repo, or
+# comments on the one already open, which holds the release back from
+# promotion to stable.
+name: canary
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: The engine version to update to, MAJOR.YMMDD.BUILD
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: canary
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  canary:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      actions: write
+      contents: write
+      issues: write
+      pull-requests: write
+    env:
+      VERSION: ${{ inputs.version }}
+    steps:
+      - name: the version is MAJOR.YMMDD.BUILD
+        run: |
+          if [[ ! $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::version must be MAJOR.YMMDD.BUILD, not \"$VERSION\""
+            exit 1
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - name: download the pinned engine
+        run: sh .claudinite/launch version
+      # The findings, not the exit code, are what the run after the update
+      # is compared with, so a failing check world here does not stop it.
+      - name: findings before the update
+        run: |
+          .claudinite/bin/cn check world > "$RUNNER_TEMP/before.txt" || true
+          cat "$RUNNER_TEMP/before.txt"
+      # Each cn update engine acts at most once: it waits for main's CI,
+      # opens the update PR and starts its CI, or lands a green one. Its
+      # PR's own CI run lands it too, so a merged PR ends the loop as well.
+      - name: update the engine to the version
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          deadline=$((SECONDS + 90 * 60))
+          pr=''
+          while :; do
+            git fetch -q origin main
+            git reset -q --hard FETCH_HEAD
+            if [ -n "$pr" ] && [ "$(gh pr view "$pr" --json state --jq .state)" = MERGED ]; then
+              echo "#$pr merged"
+              break
+            fi
+            verdict=$(.claudinite/bin/cn update engine | tee -a "$RUNNER_TEMP/update.log" | tail -n 1)
+            echo "cn update engine: $verdict"
+            case $verdict in
+              "landed $VERSION")
+                break ;;
+              "opened #"*" for $VERSION")
+                pr=${verdict#opened #}
+                pr=${pr%% *} ;;
+              *"agent stage"*)
+                echo "::error::the update PR for $VERSION changes .github/workflows/, which only the engine/update task's agent stage may merge, and this canary runs none: $verdict"
+                exit 1 ;;
+              "skipped: #"*" for $VERSION is open and its CI concluded "*)
+                echo "::error::the update PR's CI is red: $verdict"
+                exit 1 ;;
+              "skipped: #"*" for $VERSION is open and "*)
+                pr=${verdict#skipped: #}
+                pr=${pr%% *} ;;
+              "skipped: main has no CI run yet"* | "skipped: main is not green (queued)" | "skipped: main is not green (in_progress)" \
+                | "skipped: main is not green (waiting)" | "skipped: main is not green (pending)" | "skipped: main is not green (requested)")
+                ;;
+              *)
+                echo "::error::the update to $VERSION stopped at: $verdict"
+                exit 1 ;;
+            esac
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "::error::$VERSION had not landed after 90 minutes; the last verdict was: $verdict"
+              exit 1
+            fi
+            sleep 30
+          done
+      - name: main pins the version
+        run: |
+          git fetch -q origin main
+          git reset -q --hard FETCH_HEAD
+          pinned=$(sh .claudinite/launch version | head -n 1)
+          if [ "$pinned" != "$VERSION" ]; then
+            echo "::error::main pins $pinned after the update, not $VERSION"
+            exit 1
+          fi
+      - name: cn selftest --repo
+        run: .claudinite/bin/cn selftest --repo .
+      # A finding is keyed by its class, check and path, the line up to its
+      # sentence, so a sentence naming the engine version does not read as
+      # new.
+      - name: no new finding in cn check world
+        if: ${{ !cancelled() }}
+        run: |
+          .claudinite/bin/cn check world > "$RUNNER_TEMP/after.txt" || true
+          cat "$RUNNER_TEMP/after.txt"
+          # A run with no finding is a clean one, so grep matching nothing is no error.
+          keys() { grep -E '^(break|finding|advisory) ' "$1" | sed 's/: .*//' | sort -u || true; }
+          new=$(comm -13 <(keys "$RUNNER_TEMP/before.txt") <(keys "$RUNNER_TEMP/after.txt"))
+          if [ -n "$new" ]; then
+            echo "::error::cn check world on $VERSION reports findings it did not report before the update:"
+            echo "$new"
+            exit 1
+          fi
+
+  report:
+    needs: canary
+    if: failure()
+    runs-on: ubuntu-24.04
+    permissions:
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ inputs.version }}
+      RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: open or update the release-blocker issue
+        run: |
+          title="Release $VERSION fails the adopted canary"
+          body="The adopted canary failed for engine $VERSION: $RUN
+
+          Promotion to stable skips $VERSION while this issue is open. Close it once the failure is understood and either fixed in a later release or judged not to block this one."
+          gh label create release-blocker --repo "$GITHUB_REPOSITORY" --force \
+            --color B60205 --description "Holds a release back from promotion to stable"
+          open=$(gh issue list --repo "$GITHUB_REPOSITORY" --label release-blocker --state open --json number,title \
+            | jq -r --arg t "$title" 'map(select(.title == $t)) | first | .number // empty')
+          if [ -n "$open" ]; then
+            gh issue comment "$open" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --label release-blocker --body "$body"
+          fi
