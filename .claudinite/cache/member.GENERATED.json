@@ -26,7 +26,7 @@
   "dormant": true,
   "held": {
     "basics": "1.61009.1",
-    "claudinite-lifecycle": "1.61009.2",
-    "git-github": "1.61009.1"
+    "claudinite-lifecycle": "1.61011.1",
+    "git-github": "1.61011.1"
   }
 }
