@@ -1,0 +1,13 @@
+engine:
+  channel: "staging"
+  releases: "missingbulb/ClaudiniteStagingDistro"
+  version: "1.61011.2"
+  manifest: "sha512-3+hFdfxxHBhGORshmp8kQpdHl4e24THDhM7YsvwwwoxqUjeFY7k1+fg1M1nKDz8WcmYCdC4Bsu/4R+T3y6SbzA=="
+packs:
+  channel: "canary"
+  declared:
+    - basics
+    - claudinite-lifecycle
+    - git-github
+tasks:
+  dormant: true
