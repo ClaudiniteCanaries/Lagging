@@ -53,7 +53,8 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: download the pinned engine
-        run: sh .claudinite/launch version
+        run: |
+          { if [ -f .claudinite/setup-cn.sh ]; then sh .claudinite/setup-cn.sh >&2 && .claudinite/bin/cn version; else sh .claudinite/launch version; fi; }
       # The engine is judged against the packs as they are now: a pack fix
       # this repo has not taken would fail selftest and stop the engine
       # update before it starts.
@@ -155,7 +156,7 @@ jobs:
         run: |
           git fetch -q origin main
           git reset -q --hard FETCH_HEAD
-          pinned=$(sh .claudinite/launch version | head -n 1)
+          pinned=$({ if [ -f .claudinite/setup-cn.sh ]; then sh .claudinite/setup-cn.sh >&2 && .claudinite/bin/cn version; else sh .claudinite/launch version; fi; } | head -n 1)
           if [ "$pinned" != "$VERSION" ]; then
             echo "::error::main pins $pinned after the update, not $VERSION"
             exit 1
