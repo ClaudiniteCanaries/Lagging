@@ -1,7 +1,7 @@
 # Claudinite's CI gate, written by cn init. check runs the pinned engine's
 # cn check world over the change: on an update PR that is the new engine
 # against this repo, and on any other PR it refuses a moved pin or
-# launcher. The update job dispatches this workflow on its PR's branch,
+# setup script. The update job dispatches this workflow on its PR's branch,
 # since GitHub starts no pull_request run for a PR the job token opened;
 # land then merges that PR once check is green. check caches the coded
 # checks binary under its own key, so only a run whose engine or checks
@@ -76,6 +76,7 @@ jobs:
           key: claudinite-checks-${{ runner.os }}-${{ runner.arch }}-${{ steps.checks.outputs.key }}
       - name: cn check world
         env:
+          GITHUB_TOKEN: ${{ github.token }}
           AUTHOR: ${{ steps.who.outputs.author }}
           BASE: ${{ steps.who.outputs.base }}
         run: .claudinite/bin/cn check world --pr-author "$AUTHOR" --base-ref "$BASE"
