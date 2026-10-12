@@ -11,3 +11,7 @@ packs:
     - git-github
 tasks:
   dormant: true
+  merge:
+    "engine/update": "merge-safe-changes"
+  frequency:
+    "engine/update": "weekly"
