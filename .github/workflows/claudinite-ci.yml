@@ -36,6 +36,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.ref }}
           fetch-depth: 0
+          persist-credentials: false
       - name: who opened the change
         id: who
         env:
@@ -92,6 +93,7 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
+          persist-credentials: false
       - name: download the pinned engine
         run: sh .claudinite/launch version
       - name: cn update land
