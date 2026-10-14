@@ -46,7 +46,7 @@ jobs:
           node-version: 24
           package-manager-cache: false
       - name: download the pinned engine
-        run: sh .claudinite/launch version
+        run: sh .claudinite/setup-cn.sh
       - name: cn execute loop
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -68,7 +68,7 @@ jobs:
         with:
           persist-credentials: false
       - name: download the pinned engine
-        run: sh .claudinite/launch version
+        run: sh .claudinite/setup-cn.sh
       - name: cn execute dispatch --continue
         env:
           GITHUB_TOKEN: ${{ github.token }}
