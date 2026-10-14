@@ -40,7 +40,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: download the pinned engine
-        run: sh .claudinite/launch version
+        run: sh .claudinite/setup-cn.sh
       - name: cn schedule run
         id: run
         env:
@@ -62,7 +62,7 @@ jobs:
         with:
           persist-credentials: false
       - name: download the pinned engine
-        run: sh .claudinite/launch version
+        run: sh .claudinite/setup-cn.sh
       - name: cn execute dispatch
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -83,7 +83,7 @@ jobs:
         with:
           persist-credentials: false
       - name: download the pinned engine
-        run: sh .claudinite/launch version
+        run: sh .claudinite/setup-cn.sh
       - name: cn schedule report-failure
         env:
           GITHUB_TOKEN: ${{ github.token }}
