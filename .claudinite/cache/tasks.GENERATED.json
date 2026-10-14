@@ -43,7 +43,7 @@
       }
     },
     "claudinite-lifecycle/adopt-requested-packs": {
-      "path": ".claudinite/shared/packs/claudinite-lifecycle/tasks/adopt-requested-packs/task.json",
+      "path": ".claudinite/temp/packs/claudinite-lifecycle/tasks/adopt-requested-packs/task.json",
       "declaration": {
         "id": "adopt-requested-packs",
         "description": "The member half of the fleet fan-out: adopts the packs an add-packs work list asks for, in this repository, by this repository's own agent.",
