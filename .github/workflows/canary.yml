@@ -127,6 +127,12 @@ jobs:
             case $verdict in
               "landed $VERSION")
                 break ;;
+              "up to date")
+                if [ "$({ if [ -f .claudinite/setup-cn.sh ]; then sh .claudinite/setup-cn.sh >&2 && .claudinite/bin/cn version; else sh .claudinite/launch version; fi; } | head -n 1)" = "$VERSION" ]; then
+                  break
+                fi
+                echo "::error::cn update engine reports up to date, but main does not pin $VERSION"
+                exit 1 ;;
               "opened #"*" for $VERSION")
                 pr=${verdict#opened #}
                 pr=${pr%% *} ;;
