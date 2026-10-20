@@ -54,7 +54,7 @@ jobs:
           persist-credentials: false
       - name: download the pinned engine
         run: |
-          { if [ -f .claudinite/setup-cn.sh ]; then sh .claudinite/setup-cn.sh >&2 && .claudinite/bin/cn version; else npx --yes @claudinite/setup@1.0.1 >&2 && .claudinite/bin/cn version; fi; }
+          { npx --yes @claudinite/setup@1.0.1 >&2 && .claudinite/bin/cn version; }
       # The engine is judged against the packs as they are now: a pack fix
       # this repo has not taken would fail selftest and stop the engine
       # update before it starts.
@@ -128,7 +128,7 @@ jobs:
               "landed $VERSION")
                 break ;;
               "up to date")
-                if [ "$({ if [ -f .claudinite/setup-cn.sh ]; then sh .claudinite/setup-cn.sh >&2 && .claudinite/bin/cn version; else npx --yes @claudinite/setup@1.0.1 >&2 && .claudinite/bin/cn version; fi; } | head -n 1)" = "$VERSION" ]; then
+                if [ "$({ npx --yes @claudinite/setup@1.0.1 >&2 && .claudinite/bin/cn version; } | head -n 1)" = "$VERSION" ]; then
                   break
                 fi
                 echo "::error::cn update engine reports up to date, but main does not pin $VERSION"
@@ -162,7 +162,7 @@ jobs:
         run: |
           git fetch -q origin main
           git reset -q --hard FETCH_HEAD
-          pinned=$({ if [ -f .claudinite/setup-cn.sh ]; then sh .claudinite/setup-cn.sh >&2 && .claudinite/bin/cn version; else npx --yes @claudinite/setup@1.0.1 >&2 && .claudinite/bin/cn version; fi; } | head -n 1)
+          pinned=$({ npx --yes @claudinite/setup@1.0.1 >&2 && .claudinite/bin/cn version; } | head -n 1)
           if [ "$pinned" != "$VERSION" ]; then
             echo "::error::main pins $pinned after the update, not $VERSION"
             exit 1
