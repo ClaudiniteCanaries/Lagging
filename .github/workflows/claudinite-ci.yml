@@ -5,7 +5,7 @@
 # passed it. A main that pins no engine yet has no guard to keep, so the
 # PR that adopts Claudinite is judged by the engine it pins, and so is a
 # change on a main whose engine predates this gate. On any other PR that
-# guard refuses a moved pin or setup script; on an update PR it verifies
+# guard refuses a moved pin; on an update PR it verifies
 # the new pin and reports the move, and the job then runs the new
 # engine's own check world over this repo, which judges the workflows the
 # update carries. The update job dispatches this workflow on its PR's
@@ -72,10 +72,18 @@ jobs:
           esac
           echo "author=$author" >> "$GITHUB_OUTPUT"
           echo "base=$base" >> "$GITHUB_OUTPUT"
-      - name: download the engine main pins
+      - if: hashFiles('.claudinite/settings.yaml') != ''
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cache/claudinite
+            ~/.npm/_cacache
+          key: cn-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.claudinite/settings.yaml') }}
+          restore-keys: cn-${{ runner.os }}-${{ runner.arch }}-
+      - name: install the engine main pins
         id: main-pins
-        if: hashFiles('.claudinite/setup-cn.sh') != ''
-        run: sh .claudinite/setup-cn.sh
+        if: hashFiles('.claudinite/settings.yaml') != ''
+        run: npx --yes --prefer-offline @claudinite/setup@1.0.1
       - name: keep main's engine outside the tree
         id: main-engine
         if: steps.main-pins.outcome == 'success'
@@ -95,9 +103,9 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.ref }}
           fetch-depth: 0
           persist-credentials: false
-      - name: download the engine the change pins
+      - name: install the engine the change pins
         if: steps.main-engine.outputs.judges != 'true'
-        run: sh .claudinite/setup-cn.sh
+        run: npx --yes --prefer-offline @claudinite/setup@1.0.1
       - name: judge the change by the engine it pins
         if: steps.main-engine.outputs.judges != 'true'
         run: install "$(readlink -f .claudinite/bin/cn)" "$RUNNER_TEMP/cn-base"
@@ -120,9 +128,9 @@ jobs:
           BASE: ${{ steps.who.outputs.base }}
         run: >-
           "$RUNNER_TEMP/cn-base" check world --pr-author "$AUTHOR" --base-ref "$BASE" --pin-output "$GITHUB_OUTPUT" --defer-workflows
-      - name: download the engine the update pins
+      - name: install the engine the update pins
         if: steps.world.outputs.pin == 'moved'
-        run: sh .claudinite/setup-cn.sh
+        run: npx --yes --prefer-offline @claudinite/setup@1.0.1
       - name: cn check world, from the new engine
         if: steps.world.outputs.pin == 'moved'
         env:
@@ -145,8 +153,8 @@ jobs:
           ref: main
           fetch-depth: 0
           persist-credentials: false
-      - name: download the pinned engine
-        run: sh .claudinite/setup-cn.sh
+      - name: install the pinned engine
+        run: npx --yes --prefer-offline @claudinite/setup@1.0.1
       - name: cn update land
         env:
           GITHUB_TOKEN: ${{ github.token }}
