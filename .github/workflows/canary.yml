@@ -114,6 +114,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           deadline=$((SECONDS + 90 * 60))
+          listed=$((SECONDS + 10 * 60))
           pr=''
           while :; do
             git fetch -q origin main
@@ -131,8 +132,13 @@ jobs:
                 if [ "$({ npx --yes @claudinite/setup@1.0.1 >&2 && .claudinite/bin/cn version; } | sed -n 1p)" = "$VERSION" ]; then
                   break
                 fi
-                echo "::error::cn update engine reports up to date, but main does not pin $VERSION"
-                exit 1 ;;
+                # npm's package listing can lag the publish by minutes.
+                if [ "$SECONDS" -lt "$listed" ]; then
+                  echo "npm does not list $VERSION yet; trying again"
+                else
+                  echo "::error::cn update engine reports up to date, but main does not pin $VERSION"
+                  exit 1
+                fi ;;
               "opened #"*" for $VERSION")
                 pr=${verdict#opened #}
                 pr=${pr%% *} ;;
