@@ -12,6 +12,6 @@ packs:
 tasks:
   dormant: true
   merge:
-    "engine/update": "merge-safe-changes"
+    "engine/update": "merge-any-changes"
   frequency:
     "engine/update": "weekly"
