@@ -55,10 +55,21 @@ jobs:
       - name: download the pinned engine
         run: |
           { npx --yes @claudinite/setup@1.0.1 >&2 && .claudinite/bin/cn version; }
+      # An engine that has the installer-run update (cn update run) takes
+      # engine and packs in one PR; an older one takes today's two updates.
+      - name: which update the pinned engine runs
+        id: flow
+        run: |
+          if .claudinite/bin/cn 2>&1 | grep -q '^  update run '; then
+            echo new=true >> "$GITHUB_OUTPUT"
+          else
+            echo new=false >> "$GITHUB_OUTPUT"
+          fi
       # The engine is judged against the packs as they are now: a pack fix
       # this repo has not taken would fail selftest and stop the engine
       # update before it starts.
       - name: update the packs
+        if: steps.flow.outputs.new != 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GH_TOKEN: ${{ github.token }}
@@ -109,6 +120,7 @@ jobs:
       # opens the update PR and starts its CI, or lands a green one. Its
       # PR's own CI run lands it too, so a merged PR ends the loop as well.
       - name: update the engine to the version
+        if: steps.flow.outputs.new != 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GH_TOKEN: ${{ github.token }}
@@ -154,6 +166,61 @@ jobs:
               "skipped: main has no CI run yet"* | "skipped: main is not green (queued)" | "skipped: main is not green (in_progress)" \
                 | "skipped: main is not green (waiting)" | "skipped: main is not green (pending)" | "skipped: main is not green (requested)")
                 ;;
+              *)
+                echo "::error::the update to $VERSION stopped at: $verdict"
+                exit 1 ;;
+            esac
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "::error::$VERSION had not landed after 90 minutes; the last verdict was: $verdict"
+              exit 1
+            fi
+            sleep 30
+          done
+      # The new engine's update opens one PR for engine and packs and never
+      # merges it: GitHub's auto-merge does once its required check passes,
+      # as this repo's merge level allows.
+      - name: update through the installer
+        if: steps.flow.outputs.new == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          deadline=$((SECONDS + 90 * 60))
+          listed=$((SECONDS + 10 * 60))
+          while :; do
+            git fetch -q origin main
+            git reset -q --hard FETCH_HEAD
+            if [ "$(sed -n 's/^  version: "\(.*\)"$/\1/p' .claudinite/settings.yaml | head -n 1)" = "$VERSION" ]; then
+              echo "main pins $VERSION"
+              break
+            fi
+            verdict=$(.claudinite/bin/cn update run | tee -a "$RUNNER_TEMP/update.log" | grep '^update: ' | tail -n 1)
+            echo "cn update run: $verdict"
+            case $verdict in
+              "update: opened #"*"engine $VERSION"* | "update: refreshed #"*"engine $VERSION"* | "update: #"*"engine $VERSION"*" is open and current")
+                pr=${verdict#update: }
+                pr=${pr#opened }
+                pr=${pr#refreshed }
+                pr=${pr#\#}
+                pr=${pr%% *}
+                for _ in $(seq 20); do
+                  [ "$(gh pr checks "$pr" --json name --jq length 2>/dev/null || echo 0)" -gt 0 ] && break
+                  sleep 15
+                done
+                if ! gh pr checks "$pr" --watch --interval 30; then
+                  echo "::error::the update PR #$pr's CI is red"
+                  exit 1
+                fi
+                for _ in $(seq 20); do
+                  [ "$(gh pr view "$pr" --json state --jq .state)" = MERGED ] && break
+                  sleep 15
+                done ;;
+              "update: up to date")
+                if [ "$SECONDS" -ge "$listed" ]; then
+                  echo "::error::cn update run reports up to date, but main does not pin $VERSION"
+                  exit 1
+                fi
+                echo "the channel does not list $VERSION yet; trying again" ;;
               *)
                 echo "::error::the update to $VERSION stopped at: $verdict"
                 exit 1 ;;
