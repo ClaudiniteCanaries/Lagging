@@ -175,6 +175,20 @@ jobs:
           fi
       - name: cn selftest --repo
         run: .claudinite/bin/cn selftest --repo .
+      # The new engine's own update, as its engine/update task runs it: the
+      # installer finds the pin current and runs that engine's apply, here
+      # writing nothing. An engine without apply ends the run here.
+      - name: the installer's update on the new engine
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          npx --yes @claudinite/setup@1 update --repo . --dry-run --json > "$RUNNER_TEMP/apply.json"
+          cat "$RUNNER_TEMP/apply.json"
+          to=$(jq -r .to "$RUNNER_TEMP/apply.json")
+          if [ "$to" != "$VERSION" ]; then
+            echo "::error::the installer's update ran an engine reporting $to, not $VERSION"
+            exit 1
+          fi
       # A finding is keyed by its class, check and path, the line up to its
       # sentence, so a sentence naming the engine version does not read as
       # new.
