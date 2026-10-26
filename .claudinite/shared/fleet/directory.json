@@ -1,19 +1,33 @@
 {
   "v": 1,
-  "serial": 11,
-  "issued": "2026-10-25T13:17:25Z",
+  "serial": 12,
+  "issued": "2026-10-26T11:38:23Z",
   "private": true,
   "memberUpdateFrequency": "daily",
   "shelfCatalogSerial": 460,
   "globalPackVersionApproval": {
-    "approvalRequiredPacks": [],
+    "approvalRequiredPacks": [
+      "git-github"
+    ],
     "unlistedGlobalPackRequested": "allowFromGlobalShelf"
   },
   "packUsageInfractions": {
     "revokedPackUsage": "reportOnly",
     "frozenVersionExceeded": "reportOnly"
   },
-  "global": {},
+  "global": {
+    "git-github": [
+      {
+        "version": "1.61013.1",
+        "sha256": "8fafb4984a39a7d4f01940ccca0e96ce2222a54a1b2bcd9ffc3abd21b573e02f",
+        "size": 24510,
+        "channel": "stable",
+        "minEngineVersion": "1.61001.1",
+        "requires": [],
+        "sourceCommit": "4da674066bd36b221a9d773d029bbdfddf050a51"
+      }
+    ]
+  },
   "fleet": {},
   "blocked": []
 }
