@@ -40,6 +40,7 @@ jobs:
       pull-requests: write
     env:
       VERSION: ${{ inputs.version }}
+      CLAUDINITE_MANAGER_TOKEN: ${{ secrets.CLAUDINITE_MANAGER_TOKEN }}
     steps:
       - name: the version is MAJOR.YMMDD.BUILD
         run: |
