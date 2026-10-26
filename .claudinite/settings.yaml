@@ -6,11 +6,12 @@ engine:
 packs:
   channel: "canary"
   declared:
-    - basics
-    - claudinite-lifecycle
-    - git-github
+    - "basics"
+    - "claudinite-lifecycle"
+    - "git-github"
+  manager:
+    repo: "ClaudiniteCanaries/FleetManager"
 tasks:
-  dormant: true
   merge:
     "engine/update": "merge-any-changes"
   frequency:
