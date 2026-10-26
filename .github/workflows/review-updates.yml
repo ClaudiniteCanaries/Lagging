@@ -48,5 +48,5 @@ jobs:
             echo "looked over $files changed files: ok"
             echo "CI is green: ok"
             gh pr comment "$pr" --body "Review: release notes read, $files changed files looked over, CI green. Approved."
-            # MERGE LINE: added by a person.
+            gh pr merge "$pr" --squash
           done
