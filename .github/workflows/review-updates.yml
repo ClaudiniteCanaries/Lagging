@@ -2,14 +2,11 @@
 # itself rather than letting GitHub auto-merge them: its merge level holds
 # every update for a person, and this workflow plays that person. It finds
 # the open update PR, waits for its CI, goes through a token review and
-# merges it. The canary run starts it once the update PR's CI is green; the
-# schedule catches a PR nothing started it for.
+# merges it. The canary run starts it once the update PR's CI is green.
 name: review-updates
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "17 * * * *"
 
 permissions: {}
 
