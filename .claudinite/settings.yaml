@@ -13,6 +13,6 @@ packs:
     repo: "ClaudiniteCanaries/FleetManager"
 tasks:
   merge:
-    "engine/update": "merge-any-changes"
+    "engine/update": "require-human-review"
   frequency:
     "engine/update": "weekly"

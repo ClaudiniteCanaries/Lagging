@@ -212,7 +212,10 @@ jobs:
                   echo "::error::the update PR #$pr's CI is red"
                   exit 1
                 fi
-                for _ in $(seq 20); do
+                # This repo's merge level holds the update for a person;
+                # review-updates is that person.
+                gh workflow run review-updates.yml
+                for _ in $(seq 40); do
                   [ "$(gh pr view "$pr" --json state --jq .state)" = MERGED ] && break
                   sleep 15
                 done ;;
