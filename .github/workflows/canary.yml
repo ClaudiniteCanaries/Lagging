@@ -1,6 +1,6 @@
-# The adopted canary. This repo is a dormant Claudinite member on the
-# staging distro, so nothing moves its pin but this run. A Claudinite engine
-# release dispatches it with the version it just published. It brings the
+# The adopted canary. This repo is a fleet member on the staging distro
+# whose own weekly update, or a pass the fleet manager forces, moves its pin
+# besides this run. A Claudinite engine release dispatches it with the version it just published. It brings the
 # packs up to date first, then runs this repo's ordinary engine update (cn update engine, as the engine/update
 # task does) until that version lands. It passes when the update PR opens
 # for the version, its CI goes green and it merges, then cn selftest --repo
@@ -40,6 +40,7 @@ jobs:
       pull-requests: write
     env:
       VERSION: ${{ inputs.version }}
+      CLAUDINITE_MANAGER_TOKEN: ${{ secrets.CLAUDINITE_MANAGER_TOKEN }}
     steps:
       - name: the version is MAJOR.YMMDD.BUILD
         run: |
