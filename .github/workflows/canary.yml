@@ -61,7 +61,9 @@ jobs:
       - name: which update the pinned engine runs
         id: flow
         run: |
-          if .claudinite/bin/cn 2>&1 | grep -q '^  update run '; then
+          # cn with no command exits non-zero, which pipefail would carry.
+          usage=$(.claudinite/bin/cn 2>&1 || true)
+          if grep -q '^  update run ' <<< "$usage"; then
             echo new=true >> "$GITHUB_OUTPUT"
           else
             echo new=false >> "$GITHUB_OUTPUT"
