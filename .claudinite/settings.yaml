@@ -12,7 +12,6 @@ packs:
   manager:
     repo: "ClaudiniteCanaries/FleetManager"
 tasks:
-  dormant: true
   merge:
     "engine/update": "merge-any-changes"
   frequency:
