@@ -23,7 +23,7 @@
       }
     ]
   },
-  "dormant": true,
+  "dormant": false,
   "held": {
     "basics": "1.61009.1",
     "git-github": "1.61013.1"
