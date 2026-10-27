@@ -16,3 +16,6 @@ tasks:
     "engine/update": "require-human-review"
   frequency:
     "engine/update": "weekly"
+growth:
+  mode: nightlyGrowth
+  sessionHistory: localPlaintext

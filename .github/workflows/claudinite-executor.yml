@@ -31,6 +31,9 @@ jobs:
       || github.event.label.name == 'task:urgent'
     runs-on: ubuntu-24.04
     timeout-minutes: 350
+    environment:
+      name: claudinite
+      deployment: false
     permissions:
       actions: write
       contents: write
