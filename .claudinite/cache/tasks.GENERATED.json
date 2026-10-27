@@ -91,12 +91,14 @@
         "trigger": "schedule",
         "preconditions": [
           "schedule:at-most-daily",
-          "substantive-change"
+          "substantive-change || session-captured"
         ],
         "expected_outcome": "amend_existing_or_create_new_pr",
         "automerge": [
           "under:.claudinite/local"
         ],
+        "code_work": "in-process: growth extract",
+        "code_work_timeout": 600,
         "agent_model": "opus",
         "agent_instructions": "task.md",
         "agent_execution_timeout": 2700
