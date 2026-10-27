@@ -347,6 +347,9 @@ jobs:
             fi
             sleep 60
           done
+          # The manager's S-04 compares this repo's agent-sessions head with the
+          # one it saw before the archive, right after the branches go.
+          sleep 300
       - name: S-11 the old retention spelling is read and the fixtures are in place
         run: |
           .claudinite/bin/cn verify > "$RUNNER_TEMP/verify.txt" || true
@@ -365,12 +368,14 @@ jobs:
       - name: S-11 captures land as plain JSONL on agent-sessions
         run: |
           stale=$(date -u -d '5 days ago' +%Y-%m-%dT%H%MZ)
-          git switch -q --detach origin/agent-sessions
-          printf '%s\n' '{"type":"user","timestamp":"2026-10-20T08:00:00.000Z","message":{"role":"user","content":"canary stale capture of Lagging"}}' > "$stale--issue-0--canary-stale.jsonl"
-          git add .
-          git -c user.name=claudinite-canary -c user.email=canary@users.noreply.github.com commit -q -m "stale fixture capture"
-          git push -q origin HEAD:agent-sessions
-          git switch -q --detach origin/main
+          rm -rf "$RUNNER_TEMP/as" && git worktree add -q --detach "$RUNNER_TEMP/as" origin/agent-sessions
+          (
+            cd "$RUNNER_TEMP/as"
+            printf '%s\n' '{"type":"user","timestamp":"2026-10-20T08:00:00.000Z","message":{"role":"user","content":"canary stale capture of Lagging"}}' > "$stale--issue-0--canary-stale.jsonl"
+            git add .
+            git -c user.name=claudinite-canary -c user.email=canary@users.noreply.github.com commit -q -m "stale fixture capture"
+            git push -q origin HEAD:agent-sessions
+          )
           .claudinite/bin/cn growth capture --issue 0 --session "canary-lagging-$VERSION" \
             --transcript .claudinite/canary-fixtures/session.jsonl | tee "$RUNNER_TEMP/capture.txt"
           grep -q 'on agent-sessions' "$RUNNER_TEMP/capture.txt" || {
@@ -438,8 +443,9 @@ jobs:
         if: ${{ always() }}
         run: |
           git fetch -q origin agent-sessions
-          git switch -q --detach origin/agent-sessions
-          cp .claudinite/canary-fixtures/agent-sessions/*.jsonl .
+          rm -rf "$RUNNER_TEMP/as-restore" && git worktree add -q --detach "$RUNNER_TEMP/as-restore" origin/agent-sessions
+          cp .claudinite/canary-fixtures/agent-sessions/*.jsonl "$RUNNER_TEMP/as-restore/"
+          cd "$RUNNER_TEMP/as-restore"
           git add .
           if ! git diff --cached --quiet; then
             git -c user.name=claudinite-canary -c user.email=canary@users.noreply.github.com commit -q -m "fixture capture"
