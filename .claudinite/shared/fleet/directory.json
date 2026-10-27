@@ -1,10 +1,10 @@
 {
   "v": 1,
-  "serial": 12,
-  "issued": "2026-10-26T11:38:23Z",
+  "serial": 13,
+  "issued": "2026-10-27T09:43:52Z",
   "private": true,
   "memberUpdateFrequency": "daily",
-  "shelfCatalogSerial": 460,
+  "shelfCatalogSerial": 461,
   "globalPackVersionApproval": {
     "approvalRequiredPacks": [
       "git-github"
