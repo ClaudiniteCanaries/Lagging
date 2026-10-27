@@ -7,7 +7,9 @@ packs:
   channel: "canary"
   declared:
     - "basics"
-    - "claudinite-lifecycle"
+    - id: "claudinite-lifecycle"
+      config:
+        retention_days: 3
     - "git-github"
   manager:
     repo: "ClaudiniteCanaries/FleetManager"
