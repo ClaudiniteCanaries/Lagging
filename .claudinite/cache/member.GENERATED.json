@@ -16,7 +16,10 @@
         "id": "basics"
       },
       {
-        "id": "claudinite-lifecycle"
+        "id": "claudinite-lifecycle",
+        "config": {
+          "retention_days": 3
+        }
       },
       {
         "id": "git-github"

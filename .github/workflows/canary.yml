@@ -298,54 +298,156 @@ jobs:
           ref: main
           persist-credentials: false
       - name: seed the conversation-logs branch
+        run: .github/scripts/seed-fixtures.sh conversation-logs
+      - name: seed the agent-sessions branch
+        run: .github/scripts/seed-fixtures.sh agent-sessions
+
+  # S-11. Today's plaintext logs, kept on purpose: the settings say
+  # localPlaintext and still spell the retention the old way
+  # (retention_days on the pack entry). A capture lands as plain JSONL on
+  # agent-sessions, and the prune task squashes that branch to the window
+  # without touching conversation-logs. The fleet manager canary's archive
+  # reads both branches, so this waits for it to delete conversation-logs
+  # (it is the archive's last act), or for the deadline, before it prunes.
+  plaintext:
+    name: S-11 plaintext history
+    needs: [canary, seed]
+    if: ${{ !cancelled() && needs.canary.result != 'skipped' && needs.seed.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    permissions:
+      actions: write
+      contents: write
+      issues: write
+    env:
+      VERSION: ${{ inputs.version }}
+      GH_TOKEN: ${{ github.token }}
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: true
+      - name: download the engine main pins
         run: |
-          url="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          if git ls-remote --exit-code --heads "$url" conversation-logs > /dev/null; then
-            echo "conversation-logs already exists; nothing to seed"
-            exit 0
-          fi
-          fixtures="$PWD/.claudinite/canary-fixtures/conversation-logs"
-          work=$(mktemp -d)
-          cd "$work"
-          git init -q -b conversation-logs
-          git config user.name "claudinite-canary"
-          git config user.email "canary@users.noreply.github.com"
-          captures=("$fixtures"/*.jsonl)
-          if [ "${#captures[@]}" -ne 4 ]; then
-            echo "::error::expected four fixture captures, found ${#captures[@]}"
+          pinned=$({ npx --yes @claudinite/setup@1.0.1 >&2 && .claudinite/bin/cn version; } | sed -n 1p)
+          if [ "$pinned" != "$VERSION" ]; then
+            echo "::error::main pins $pinned, not $VERSION: the update did not land"
             exit 1
           fi
-          cp "${captures[0]}" "${captures[1]}" .
-          git add .
-          git commit -q -m "fixture captures 1-2"
-          cp "${captures[2]}" .
-          git add .
-          git commit -q -m "fixture capture 3"
-          cp "${captures[3]}" .
-          git rm -q "$(basename "${captures[0]}")"
-          git add .
-          git commit -q -m "fixture capture 4, capture 1 pruned"
-          git push -q "$url" conversation-logs
-          echo "seeded conversation-logs: $(git rev-list --count HEAD) commits, $(ls | wc -l) captures at the tip"
-      - name: seed the agent-sessions branch
+      - name: S-11 the archive is done with the fixture branches
         run: |
-          url="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          if git ls-remote --exit-code --heads "$url" agent-sessions > /dev/null; then
-            echo "agent-sessions already exists; nothing to seed"
-            exit 0
-          fi
-          work=$(mktemp -d)
-          cp .claudinite/canary-fixtures/agent-sessions/*.jsonl "$work"/
-          cd "$work"
-          git init -q -b agent-sessions
-          git config user.name "claudinite-canary"
-          git config user.email "canary@users.noreply.github.com"
+          # The archive deletes conversation-logs once it holds every capture.
+          deadline=$((SECONDS + 100 * 60))
+          while git ls-remote --exit-code --heads origin conversation-logs > /dev/null; do
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "::notice::the deadline passed with conversation-logs still there; going on without the archive's leave"
+              break
+            fi
+            sleep 60
+          done
+      - name: S-11 the old retention spelling is read and the fixtures are in place
+        run: |
+          .claudinite/bin/cn verify > "$RUNNER_TEMP/verify.txt" || true
+          cat "$RUNNER_TEMP/verify.txt"
+          grep -q 'growth-retention-spelling' "$RUNNER_TEMP/verify.txt" || {
+            echo "::error::cn verify does not read retention_days on the pack entry as the legacy spelling"
+            exit 1
+          }
+          .github/scripts/seed-fixtures.sh conversation-logs
+          .github/scripts/seed-fixtures.sh agent-sessions
+          git fetch -q origin conversation-logs agent-sessions
+          git rev-parse origin/conversation-logs > "$RUNNER_TEMP/logs-before"
+      # A capture 5 days old is past the 3 days retention_days says and inside
+      # the 10 days the engine falls back to: it goes only if the old spelling
+      # is honoured.
+      - name: S-11 captures land as plain JSONL on agent-sessions
+        run: |
+          stale=$(date -u -d '5 days ago' +%Y-%m-%dT%H%MZ)
+          git switch -q --detach origin/agent-sessions
+          printf '%s\n' '{"type":"user","timestamp":"2026-10-20T08:00:00.000Z","message":{"role":"user","content":"canary stale capture of Lagging"}}' > "$stale--issue-0--canary-stale.jsonl"
           git add .
-          git commit -q -m "fixture capture"
-          git push -q "$url" agent-sessions
+          git -c user.name=claudinite-canary -c user.email=canary@users.noreply.github.com commit -q -m "stale fixture capture"
+          git push -q origin HEAD:agent-sessions
+          git switch -q --detach origin/main
+          .claudinite/bin/cn growth capture --issue 0 --session "canary-lagging-$VERSION" \
+            --transcript .claudinite/canary-fixtures/session.jsonl | tee "$RUNNER_TEMP/capture.txt"
+          grep -q 'on agent-sessions' "$RUNNER_TEMP/capture.txt" || {
+            echo "::error::the capture did not report a file stored on agent-sessions"
+            exit 1
+          }
+          git fetch -q origin agent-sessions
+          new=$(git ls-tree -r --name-only origin/agent-sessions | grep -- '--issue-0--canary-lagging-' || true)
+          if [ -z "$new" ]; then
+            echo "::error::agent-sessions holds no capture of this session"
+            exit 1
+          fi
+          git show "origin/agent-sessions:$new" | grep -q 'canary-fixture-marker' || {
+            echo "::error::the capture on agent-sessions is not plain JSONL of the fixture"
+            exit 1
+          }
+          echo "$new" > "$RUNNER_TEMP/new-capture"
+      - name: S-11 the prune squashes agent-sessions to the window
+        run: |
+          started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          created=$(.claudinite/bin/cn work create engine/logs-prune)
+          echo "$created"
+          number=$(sed -n 's/^created #\([0-9]*\) .*/\1/p' <<<"$created")
+          if [ -z "$number" ]; then
+            echo "::error::cn work create did not report the item it filed"
+            exit 1
+          fi
+          gh workflow run claudinite-executor.yml --repo "$GITHUB_REPOSITORY"
+          deadline=$((SECONDS + 30 * 60))
+          while :; do
+            sleep 30
+            labels=$(gh api "repos/$GITHUB_REPOSITORY/issues/$number" --jq '[.labels[].name] | join(" ")')
+            case " $labels " in
+              *" task:status:done "*)
+                echo "engine/logs-prune #$number done"
+                break ;;
+              *" task:status:needs-human-"* | *" task:status:rejected "*)
+                echo "::error::engine/logs-prune #$number stopped at: $labels"
+                exit 1 ;;
+            esac
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "::error::the deadline passed before the prune item was done; #$number carries: $labels"
+              exit 1
+            fi
+          done
+          git fetch -q origin agent-sessions conversation-logs
+          commits=$(git rev-list --count origin/agent-sessions)
+          files=$(git ls-tree -r --name-only origin/agent-sessions | grep -v '^README' || true)
+          echo "agent-sessions: $commits commit(s) holding: $files"
+          if [ "$commits" != 1 ]; then
+            echo "::error::the prune left agent-sessions with $commits commits, not one"
+            exit 1
+          fi
+          if [ "$files" != "$(cat "$RUNNER_TEMP/new-capture")" ]; then
+            echo "::error::agent-sessions should hold only this run's capture after the prune"
+            exit 1
+          fi
+          if [ "$(git rev-parse origin/conversation-logs)" != "$(cat "$RUNNER_TEMP/logs-before")" ]; then
+            echo "::error::the prune moved conversation-logs"
+            exit 1
+          fi
+      # The fleet manager's archive imports this plaintext capture on the next
+      # release, so the branch goes back to the capture it is seeded with.
+      - name: S-11 put the seeded capture back
+        if: ${{ always() }}
+        run: |
+          git fetch -q origin agent-sessions
+          git switch -q --detach origin/agent-sessions
+          cp .claudinite/canary-fixtures/agent-sessions/*.jsonl .
+          git add .
+          if ! git diff --cached --quiet; then
+            git -c user.name=claudinite-canary -c user.email=canary@users.noreply.github.com commit -q -m "fixture capture"
+            git push -q origin HEAD:agent-sessions
+          fi
 
   report:
-    needs: [canary, seed]
+    needs: [canary, seed, plaintext]
     if: failure()
     runs-on: ubuntu-24.04
     permissions:
