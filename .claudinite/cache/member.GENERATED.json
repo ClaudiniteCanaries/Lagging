@@ -6,7 +6,7 @@
   },
   "engine": {
     "package": "@claudinite/cli",
-    "version": "1.61026.6",
+    "version": "1.61027.1",
     "channel": "staging"
   },
   "packs": {
