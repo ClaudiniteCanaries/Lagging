@@ -365,6 +365,21 @@ jobs:
       # A capture 5 days old is past the 3 days retention_days says and inside
       # the 10 days the engine falls back to: it goes only if the old spelling
       # is honoured.
+      - name: S-11 start from the seeded agent-sessions
+        run: |
+          git fetch -q origin agent-sessions
+          rm -rf "$RUNNER_TEMP/as-reset" && git worktree add -q --detach "$RUNNER_TEMP/as-reset" origin/agent-sessions
+          cp .claudinite/canary-fixtures/agent-sessions/*.jsonl "$RUNNER_TEMP/as-reset/"
+          cd "$RUNNER_TEMP/as-reset"
+          keep=$(for f in "$GITHUB_WORKSPACE"/.claudinite/canary-fixtures/agent-sessions/*.jsonl; do basename "$f"; done)
+          for f in $(git ls-files); do
+            grep -qxF "$f" <<<"$keep" || git rm -q -- "$f"
+          done
+          git add .
+          if ! git diff --cached --quiet; then
+            git -c user.name=claudinite-canary -c user.email=canary@users.noreply.github.com commit -q -m "back to the seeded fixture"
+            git push -q origin HEAD:agent-sessions
+          fi
       - name: S-11 captures land as plain JSONL on agent-sessions
         run: |
           stale=$(date -u -d '5 days ago' +%Y-%m-%dT%H%MZ)
@@ -376,14 +391,14 @@ jobs:
             git -c user.name=claudinite-canary -c user.email=canary@users.noreply.github.com commit -q -m "stale fixture capture"
             git push -q origin HEAD:agent-sessions
           )
-          .claudinite/bin/cn growth capture --issue 0 --session "canary-lagging-$VERSION" \
+          .claudinite/bin/cn growth capture --issue 0 --session "canary-lagging-$VERSION-$GITHUB_RUN_ID" \
             --transcript .claudinite/canary-fixtures/session.jsonl | tee "$RUNNER_TEMP/capture.txt"
           grep -q 'on agent-sessions' "$RUNNER_TEMP/capture.txt" || {
             echo "::error::the capture did not report a file stored on agent-sessions"
             exit 1
           }
           git fetch -q origin agent-sessions
-          new=$(git ls-tree -r --name-only origin/agent-sessions | grep -- '--issue-0--canary-lagging-' || true)
+          new=$(git ls-tree -r --name-only origin/agent-sessions | grep -- "--issue-0--canary-lagging-$VERSION-$GITHUB_RUN_ID" || true)
           if [ -z "$new" ]; then
             echo "::error::agent-sessions holds no capture of this session"
             exit 1
