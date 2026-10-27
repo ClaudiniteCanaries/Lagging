@@ -279,8 +279,73 @@ jobs:
             exit 1
           fi
 
+  # The fleet manager canary's archive scenario needs history to import on
+  # every release. The archive deletes the member's conversation-logs branch
+  # once it holds every capture, so this job recreates it from the committed
+  # fixtures when it is absent: four captures in three commits, the first
+  # pruned from the tip so only the history holds it.
+  seed:
+    name: seed conversation-logs fixture
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - name: seed the conversation-logs branch
+        run: |
+          url="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git ls-remote --exit-code --heads "$url" conversation-logs > /dev/null; then
+            echo "conversation-logs already exists; nothing to seed"
+            exit 0
+          fi
+          fixtures="$PWD/.claudinite/canary-fixtures/conversation-logs"
+          work=$(mktemp -d)
+          cd "$work"
+          git init -q -b conversation-logs
+          git config user.name "claudinite-canary"
+          git config user.email "canary@users.noreply.github.com"
+          captures=("$fixtures"/*.jsonl)
+          if [ "${#captures[@]}" -ne 4 ]; then
+            echo "::error::expected four fixture captures, found ${#captures[@]}"
+            exit 1
+          fi
+          cp "${captures[0]}" "${captures[1]}" .
+          git add .
+          git commit -q -m "fixture captures 1-2"
+          cp "${captures[2]}" .
+          git add .
+          git commit -q -m "fixture capture 3"
+          cp "${captures[3]}" .
+          git rm -q "$(basename "${captures[0]}")"
+          git add .
+          git commit -q -m "fixture capture 4, capture 1 pruned"
+          git push -q "$url" conversation-logs
+          echo "seeded conversation-logs: $(git rev-list --count HEAD) commits, $(ls | wc -l) captures at the tip"
+      - name: seed the agent-sessions branch
+        run: |
+          url="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git ls-remote --exit-code --heads "$url" agent-sessions > /dev/null; then
+            echo "agent-sessions already exists; nothing to seed"
+            exit 0
+          fi
+          work=$(mktemp -d)
+          cp .claudinite/canary-fixtures/agent-sessions/*.jsonl "$work"/
+          cd "$work"
+          git init -q -b agent-sessions
+          git config user.name "claudinite-canary"
+          git config user.email "canary@users.noreply.github.com"
+          git add .
+          git commit -q -m "fixture capture"
+          git push -q "$url" agent-sessions
+
   report:
-    needs: canary
+    needs: [canary, seed]
     if: failure()
     runs-on: ubuntu-24.04
     permissions:
