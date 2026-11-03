@@ -14,6 +14,9 @@ packs:
   manager:
     repo: "ClaudiniteCanaries/FleetManager"
 tasks:
+  routines:
+    default:
+      url: "https://api.anthropic.com/v1/claude_code/routines/trig_01YYh4bn2oYx5vMnU6wUTkB1"
   merge:
     "engine/update": "require-human-review"
   frequency:
